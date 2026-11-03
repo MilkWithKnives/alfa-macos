@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+.venv/
+build/
+dist/
+*.log
+*.pcap
+*.pcapng
+*.kismet*
+captures/
+reports/
+result.json
+.env
+.env.*
+installed-revision.txt
+installed-packages.txt

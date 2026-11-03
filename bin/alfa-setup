@@ -1,0 +1,76 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+set -euo pipefail
+source "${ALFA_HOME:-$HOME/.local/share/alfa-macos}/lib/common.sh"
+revision=49b2884770c515186762bba5166fcb53fabae7fa
+seed=""
+skip_deps=false
+jobs=4
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --help|-h)
+      printf 'Usage: alfa-setup [--skip-deps] [--source LOCAL_KISMET_REPO] [--jobs N]\nBuilds only the capture helper from a pinned Kismet revision.\n'
+      exit 0 ;;
+    --skip-deps) skip_deps=true; shift ;;
+    --source) seed="${2:?Expected local Kismet repository}"; shift 2 ;;
+    --jobs) jobs="${2:?Expected job count}"; shift 2 ;;
+    *) printf 'Unknown option: %s\n' "$1" >&2; exit 2 ;;
+  esac
+done
+case "$jobs" in ''|*[!0-9]*|0) printf 'Jobs must be a positive integer.\n' >&2; exit 2 ;; esac
+[ "$(uname -s)" = Darwin ] || { printf 'Driver setup currently supports macOS only.\n' >&2; exit 1; }
+command -v brew >/dev/null || { printf 'Install Homebrew first: https://brew.sh\n' >&2; exit 1; }
+xcrun --find clang >/dev/null || { printf 'Install Apple command-line tools: xcode-select --install\n' >&2; exit 1; }
+if ! "$skip_deps"; then
+  brew install python libusb pkg-config
+  brew tap kismetwireless/kismet
+  if ! command -v kismet >/dev/null; then brew install --HEAD kismet-git; fi
+fi
+command -v kismet >/dev/null || { printf 'Kismet is required. Install kismet-git with Homebrew.\n' >&2; exit 1; }
+brew_prefix="$(brew --prefix)"
+firmware="$brew_prefix/share/kismet/firmware"
+[ -f "$firmware/rtw88/rtw8821a_fw.bin" ] || { printf 'Kismet RTL8821A firmware is missing at %s\n' "$firmware" >&2; exit 1; }
+src="$ALFA_DRIVER_DIR/source"
+mkdir -p "$ALFA_DRIVER_DIR/bin" "$ALFA_DRIVER_DIR/logs"
+if [ ! -d "$src/.git" ]; then
+  if [ -e "$src" ]; then printf 'Existing non-Git source directory: %s\n' "$src" >&2; exit 1; fi
+  if [ -n "$seed" ]; then
+    git clone --no-hardlinks --no-checkout "$seed" "$src"
+  else
+    git init "$src"
+    git -C "$src" remote add origin https://www.kismetwireless.net/git/kismet.git
+    git -C "$src" fetch --depth 1 origin "$revision"
+  fi
+  git -C "$src" checkout --detach "$revision"
+fi
+[ "$(git -C "$src" rev-parse HEAD)" = "$revision" ] || { printf 'Source revision differs from the tested pin. Use a fresh ALFA_DRIVER_DIR.\n' >&2; exit 1; }
+patch_file="$ALFA_HOME/patches/kismet-little-endian.patch"
+if git -C "$src" apply --check "$patch_file"; then
+  git -C "$src" apply "$patch_file"
+elif git -C "$src" apply --reverse --check "$patch_file" >/dev/null 2>&1; then
+  printf 'Byte-order patch is already applied.\n'
+else
+  printf 'Source does not match the patch. No files were reset.\n' >&2; exit 1
+fi
+log="$ALFA_DRIVER_DIR/logs/build-$(date +%Y%m%d-%H%M%S).log"
+printf 'Building native capture helper; log: %s\n' "$log"
+(
+  cd "$src"
+  ./configure --enable-homebrew --enable-capture-tools-only --enable-usbwifi --prefix="$ALFA_DRIVER_DIR"
+  make -j"$jobs" libkismetdatasource.a
+  make -C capture_userspace_usb_wifi -j"$jobs" FIRMWAREDIR="$firmware"
+  cp "$ALFA_HOME/tests/byteorder.c" capture_userspace_usb_wifi/tools/alfa_byteorder_test.c
+  cd capture_userspace_usb_wifi
+  clang -std=gnu11 -pthread -Ikcompat/include -Ikcompat/upstream -Ikcompat/upstream/uapi -I. \
+    tools/alfa_byteorder_test.c -Wl,-force_load,libuwifi.a ../libkismetdatasource.a \
+    -L"$brew_prefix/lib" -L"$brew_prefix/opt/zstd/lib" -L"$brew_prefix/opt/xz/lib" \
+    -lusb-1.0 -lzstd -llzma -o alfa_byteorder_test
+  ./alfa_byteorder_test
+) > "$log" 2>&1 || { tail -n 35 "$log" >&2; exit 1; }
+if [ -e "$ALFA_DRIVER_DIR/bin/kismet_cap_usbwifi" ]; then
+  cp "$ALFA_DRIVER_DIR/bin/kismet_cap_usbwifi" "$ALFA_DRIVER_DIR/bin/kismet_cap_usbwifi.previous"
+fi
+install -m 755 "$src/capture_userspace_usb_wifi/kismet_cap_usbwifi" "$ALFA_DRIVER_DIR/bin/kismet_cap_usbwifi.new"
+mv "$ALFA_DRIVER_DIR/bin/kismet_cap_usbwifi.new" "$ALFA_DRIVER_DIR/bin/kismet_cap_usbwifi"
+printf '%s\n' "$revision" > "$ALFA_DRIVER_DIR/installed-revision.txt"
+printf 'Capture helper built and regression test passed. Run alfa-sniff --check.\n'

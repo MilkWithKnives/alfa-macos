@@ -1,0 +1,14 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+set -euo pipefail
+source "${ALFA_HOME:-$HOME/.local/share/alfa-macos}/lib/common.sh"
+if [ "${1:-}" = --help ] || [ "${1:-}" = -h ]; then
+  exec "$(alfa_python)" "$ALFA_HOME/lib/probe_check.py" --help
+fi
+python="$ALFA_RADIO_DIR/venv/bin/python"
+if [ ! -x "$python" ]; then
+  printf 'Run alfa-injection-setup first.\n' >&2
+  exit 1
+fi
+alfa_no_capture
+exec "$python" "$ALFA_HOME/lib/probe_check.py" "$@"

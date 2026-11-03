@@ -1,0 +1,23 @@
+diff --git a/capture_userspace_usb_wifi/kcompat/include/kcompat/bits.h b/capture_userspace_usb_wifi/kcompat/include/kcompat/bits.h
+index fa0c83658..9f5536778 100644
+--- a/capture_userspace_usb_wifi/kcompat/include/kcompat/bits.h
++++ b/capture_userspace_usb_wifi/kcompat/include/kcompat/bits.h
+@@ -23,6 +23,18 @@
+ 
+ #include "base.h"
+ 
++/* Linux drivers also select struct layouts with these byteorder.h macros.
++ * base.h already rejects non-little-endian hosts. macOS does not provide
++ * __LITTLE_ENDIAN through its libc headers; without it rtw88 interprets PHY
++ * condition tokens as register writes, corrupting the system registers.
++ */
++#ifndef __LITTLE_ENDIAN
++#define __LITTLE_ENDIAN 1234
++#endif
++#ifndef __LITTLE_ENDIAN_BITFIELD
++#define __LITTLE_ENDIAN_BITFIELD
++#endif
++
+ #define swab16(x) __builtin_bswap16(x)
+ #define swab32(x) __builtin_bswap32(x)
+ #define swab64(x) __builtin_bswap64(x)

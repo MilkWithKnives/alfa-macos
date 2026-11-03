@@ -1,0 +1,64 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+set -euo pipefail
+source "${ALFA_HOME:-$HOME/.local/share/alfa-macos}/lib/common.sh"
+source_options=""
+check_only=false
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --help|-h)
+      cat <<'HELP'
+Usage: alfa-sniff [--channel CHANNEL] [--diagnose] [--check] [-- KISMET_OPTIONS]
+  --channel N   Capture on a fixed channel (otherwise Kismet hops channels).
+  --diagnose    Include driver startup messages.
+  --check       List and identify the ALFA without starting capture.
+  --            Pass remaining arguments to Kismet.
+Ctrl-C stops capture and generates HTML, CSV and PCAPNG reports.
+HELP
+      exit 0 ;;
+    --channel)
+      case "${2:-}" in ''|*[!0-9]*) printf 'Expected a channel number.\n' >&2; exit 2 ;; esac
+      source_options="$source_options,channel_hop=false,channel=$2"
+      shift 2 ;;
+    --diagnose) source_options="$source_options,verbose=true"; shift ;;
+    --check|--list) check_only=true; shift ;;
+    --) shift; break ;;
+    *) printf 'Unknown option: %s. Use -- before Kismet options.\n' "$1" >&2; exit 2 ;;
+  esac
+done
+helper="$ALFA_DRIVER_DIR/bin/kismet_cap_usbwifi"
+if [ ! -x "$helper" ]; then printf 'Run alfa-setup to build the patched capture helper.\n' >&2; exit 1; fi
+command -v kismet >/dev/null || { printf 'Kismet is missing. Run alfa-setup.\n' >&2; exit 1; }
+log_dir="$HOME/Library/Logs/alfa-macos"
+mkdir -p "$log_dir"
+devices="$("$helper" --list 2>&1 || true)"
+printf '%s\n' "$devices" | tee "$log_dir/devices.log"
+iface="$(printf '%s\n' "$devices" | awk '/\(0[bB][dD][aA]:0811\)/ {print $1; exit}')"
+case "$iface" in
+  rtw8821a-[0-9]*) ;;
+  '') printf 'ALFA 0bda:0811 is not accessible. Run from a normal Terminal and release VM USB passthrough.\n' >&2; exit 1 ;;
+  *) printf 'Unexpected driver for 0bda:0811: %s\n' "$iface" >&2; exit 1 ;;
+esac
+printf 'Using %s — ALFA AWUS036ACS / RTL8811AU\n' "$iface"
+if "$check_only"; then exit 0; fi
+mkdir -p "$ALFA_DATA_DIR"
+capture_dir="$(mktemp -d "$ALFA_DATA_DIR/$(date +%Y%m%d-%H%M%S).XXXXXX")"
+helper_config="$capture_dir/helper.conf"
+printf 'helper_binary_path=%s/bin\nhelper_binary_path=%%B\n' "$ALFA_DRIVER_DIR" > "$helper_config"
+cd "$capture_dir"
+printf 'Capture: %s\nKismet: http://localhost:2501\nStop with Ctrl-C.\n' "$capture_dir"
+trap ':' INT
+set +e
+kismet --override "$helper_config" -c "$iface:type=usbwifi,name=ALFA-ACS$source_options" "$@"
+capture_status=$?
+set -e
+trap - INT
+if compgen -G "$capture_dir/*.kismet" >/dev/null; then
+  printf '\nPreparing packet tables and full capture export...\n'
+  if "$ALFA_HOME/bin/alfa-report" "$capture_dir"; then
+    printf 'Report: %s/Latest Report/index.html\n' "$ALFA_DATA_DIR"
+  else
+    printf 'Report export failed. Original capture remains at %s\nRetry with alfa-report.\n' "$capture_dir" >&2
+  fi
+fi
+exit "$capture_status"

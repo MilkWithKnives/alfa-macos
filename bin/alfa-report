@@ -1,0 +1,5 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+set -euo pipefail
+source "${ALFA_HOME:-$HOME/.local/share/alfa-macos}/lib/common.sh"
+exec "$(alfa_python)" "$ALFA_HOME/lib/report.py" "$@"

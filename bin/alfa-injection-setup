@@ -1,0 +1,37 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+set -euo pipefail
+source "${ALFA_HOME:-$HOME/.local/share/alfa-macos}/lib/common.sh"
+if [ "${1:-}" = --help ] || [ "${1:-}" = -h ]; then
+  printf 'Usage: alfa-injection-setup\nInstalls pinned wifit3 in an isolated environment and runs a no-radio smoke test.\n'
+  exit 0
+fi
+[ $# -eq 0 ] || { printf 'Usage: alfa-injection-setup\n' >&2; exit 2; }
+revision=a106dffc62824d1e63658d4b82c709893939521d
+src="$ALFA_RADIO_DIR/source"
+mkdir -p "$ALFA_RADIO_DIR"
+if [ ! -d "$src/.git" ]; then
+  if [ -e "$src" ]; then printf 'Existing non-Git source directory: %s\n' "$src" >&2; exit 1; fi
+  git init "$src"
+  git -C "$src" remote add origin https://github.com/derv82/wifit3.git
+  git -C "$src" fetch --depth 1 origin "$revision"
+  git -C "$src" checkout --detach "$revision"
+fi
+[ "$(git -C "$src" rev-parse HEAD)" = "$revision" ] || { printf 'Source differs from tested pin. Use a fresh ALFA_RADIO_DIR.\n' >&2; exit 1; }
+if [ ! -x "$ALFA_RADIO_DIR/venv/bin/python" ]; then
+  "$(alfa_python)" -m venv "$ALFA_RADIO_DIR/venv"
+fi
+python="$ALFA_RADIO_DIR/venv/bin/python"
+"$python" -m pip install --disable-pip-version-check "$src"
+"$python" -m wifit3 --version
+"$python" -m wifit3 --smoke
+WIFIT3_RTL8821=dkms "$python" - <<'PY'
+from wifit3.device.manager import driver_for
+result = driver_for(0x0bda, 0x0811)
+assert result is not None, 'No driver for ALFA 0bda:0811'
+assert 'rtl8821au_dkms' in result[0].__module__, 'Unexpected driver selection'
+print('ALFA driver:', result[0].__module__)
+PY
+git -C "$src" rev-parse HEAD > "$ALFA_RADIO_DIR/installed-revision.txt"
+"$python" -m pip freeze > "$ALFA_RADIO_DIR/installed-packages.txt"
+printf 'Installed and smoke-tested. No transmission started. See alfa-injection-check --help.\n'
