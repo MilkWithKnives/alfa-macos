@@ -215,7 +215,7 @@
     "category": "Deauthentication",
     "title": "Open the native deauthentication interface",
     "command": "WIFIT3_RTL8821=dkms \"${ALFA_RADIO_DIR:-$HOME/.local/opt/wifit3}/venv/bin/python\" -m wifit3",
-    "description": "This opens the installed wifit3 terminal interface. Stop alfa-sniff first. Deauthentication can disconnect clients; use your own access point and a test device you control. This version has no standalone --deauth CLI flag. The project maintainer confirms deauthentication works on the tested ALFA/macOS setup. This is a maintainer-reported hardware result; a separate deauthentication capture/log has not been reviewed or published here.",
+    "description": "This opens the installed wifit3 terminal interface. Stop alfa-sniff first. Deauthentication can disconnect clients; use your own access point and a test device you control. This version has no standalone --deauth CLI flag. The project maintainer confirms deauthentication works on the tested ALFA/macOS setup. Redacted runtime screenshots document deauthentication followed by handshake capture; an independent over-air deauthentication packet trace is not published here.",
     "steps": [
       "Select the ALFA if prompted.",
       "Select your network in the scanner to open its focused view. Confirm the BSSID; that view tunes to the AP channel.",

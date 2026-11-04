@@ -18,6 +18,12 @@ No kernel extension, Linux VM, or custom firmware. Kismet and wifit3 provide the
 
 **[Full command guide: activation, monitoring, injection, deauthentication, and reports](docs/commands.md)**
 
+### Working setup
+
+![Redacted wifit3 runtime log showing deauthentication followed by handshake capture](docs/images/wifit3-deauth-handshake.png)
+
+The maintainer's AWUS036ACS running **[wifit3 0.7.0 by derv82](https://github.com/derv82/wifit3)**. The log reports deauthentication followed by a captured handshake on channel 44. Solid masks hide network/device identifiers; the remaining screenshot pixels are unchanged. This is wifit3's terminal UI; alfa-macos's offline HTML report is a separate interface. **[View all five screenshots and evidence notes](docs/screenshots.md).**
+
 ## Tested hardware
 
 | Component | Verified configuration |
@@ -29,7 +35,7 @@ No kernel extension, Linux VM, or custom firmware. Kismet and wifit3 provide the
 | Capture | Patched Kismet userspace `rtw8821a` driver |
 | Injection check | wifit3 0.7.0 vendor-derived `rtl8821au_dkms` userspace driver, channel 1 |
 
-The **ACS is not the ACM**. Other adapters, Intel Macs, other macOS versions, and 5 GHz injection have not been validated. The probe-check command currently accepts channels 1–11 only. Successful USB submission is not treated as proof of transmission.
+The **ACS is not the ACM**. Other adapters, Intel Macs, and other macOS versions have not been validated. Saved probe-check evidence covers channel 1; the maintainer's wifit3 screenshots also show deauthentication followed by handshake capture on channel 44. The probe-check command currently accepts channels 1–11 only. Successful USB submission is not treated as proof of transmission.
 
 ## Install
 
@@ -131,7 +137,7 @@ WIFIT3_RTL8821=dkms "${ALFA_RADIO_DIR:-$HOME/.local/opt/wifit3}/venv/bin/python"
 
 Select the adapter if prompted, open your authorized test network from the scanner, and use the target client's **✕ — Deauthenticate Client** control in the focused view. Press `q` to quit. The pinned version exposes this operation through its UI, not a standalone `--deauth` CLI flag. See the [command guide](docs/commands.md) and the HTML report's command glossary for the controls and their meanings.
 
-The control sends deauthentication frames through wifit3's injection driver. Protected Management Frames can prevent a client from accepting them; transmit submission or an ACK alone does not prove disconnection. Deauthentication through the wifit3 UI is confirmed working by the project maintainer on the tested ALFA/macOS setup. This is a maintainer-reported hardware result; a separate deauthentication capture/log has not been reviewed or published here. The recorded five-request hardware check above independently verifies probe injection. The offline HTML report displays evidence and copies commands; radio operations run in Kismet or wifit3.
+The control sends deauthentication frames through wifit3's injection driver. Protected Management Frames can prevent a client from accepting them; transmit submission or an ACK alone does not prove disconnection. Deauthentication through the wifit3 UI is confirmed working by the project maintainer on the tested ALFA/macOS setup. [Redacted runtime screenshots](docs/screenshots.md) document deauthentication followed by handshake capture; an independent over-air deauthentication packet trace is not published here. The recorded five-request hardware check above independently verifies probe injection. The offline HTML report displays evidence and copies commands; radio operations run in Kismet or wifit3.
 
 ## Why the patch matters
 
