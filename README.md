@@ -131,7 +131,7 @@ WIFIT3_RTL8821=dkms "${ALFA_RADIO_DIR:-$HOME/.local/opt/wifit3}/venv/bin/python"
 
 Select the adapter if prompted, open your authorized test network from the scanner, and use the target client's **✕ — Deauthenticate Client** control in the focused view. Press `q` to quit. The pinned version exposes this operation through its UI, not a standalone `--deauth` CLI flag. See the [command guide](docs/commands.md) and the HTML report's command glossary for the controls and their meanings.
 
-The control sends deauthentication frames through wifit3's injection driver. Protected Management Frames can prevent a client from accepting them; transmit submission or an ACK alone does not prove disconnection. The recorded five-request hardware check above verifies probe injection, while the deauthentication workflow is documented from the pinned wifit3 implementation. The offline HTML report displays evidence and copies commands; radio operations run in Kismet or wifit3.
+The control sends deauthentication frames through wifit3's injection driver. Protected Management Frames can prevent a client from accepting them; transmit submission or an ACK alone does not prove disconnection. Deauthentication through the wifit3 UI is confirmed working by the project maintainer on the tested ALFA/macOS setup. This is a maintainer-reported hardware result; a separate deauthentication capture/log has not been reviewed or published here. The recorded five-request hardware check above independently verifies probe injection. The offline HTML report displays evidence and copies commands; radio operations run in Kismet or wifit3.
 
 ## Why the patch matters
 
