@@ -1,0 +1,351 @@
+[
+  {
+    "category": "Setup",
+    "title": "Activate commands in this terminal",
+    "command": "export PATH=\"$HOME/.local/bin:$PATH\"",
+    "description": "Makes the installed ALFA commands available in the current shell. Add this same line once to ~/.zshrc to keep it in new zsh terminals. No virtual environment activation is needed."
+  },
+  {
+    "category": "Setup",
+    "title": "Check command locations",
+    "command": "command -v alfa-sniff alfa-report alfa-injection-check",
+    "description": "Prints the installed command paths. Missing output means the command is not installed or its directory is not on PATH."
+  },
+  {
+    "category": "Setup",
+    "title": "Install capture and report support",
+    "command": "cd \"$HOME/Projects/alfa-macos\"\n./install.sh --with-capture",
+    "description": "Installs commands, dependencies, Desktop shortcuts, and the patched capture helper. Requires Homebrew and Apple command-line tools. Adjust the checkout path if yours differs."
+  },
+  {
+    "category": "Setup",
+    "title": "Install capture plus injection support",
+    "command": "cd \"$HOME/Projects/alfa-macos\"\n./install.sh --with-injection",
+    "description": "Includes capture/report setup and the pinned injection environment. Setup does not start capture or transmit packets."
+  },
+  {
+    "category": "Setup",
+    "title": "Refresh command scripts only",
+    "command": "cd \"$HOME/Projects/alfa-macos\"\n./install.sh",
+    "description": "Copies scripts and report assets from the checkout, backing up replaced commands. Keeps existing driver builds; use this after updating the checkout when dependencies are already installed."
+  },
+  {
+    "category": "Setup",
+    "title": "Install without Desktop shortcuts",
+    "command": "cd \"$HOME/Projects/alfa-macos\"\n./install.sh --with-capture --no-desktop",
+    "description": "Runs capture setup while skipping Desktop shortcuts. --no-desktop also works with --with-injection or command-only installation."
+  },
+  {
+    "category": "Setup",
+    "title": "Install Apple command-line tools",
+    "command": "xcode-select --install",
+    "description": "Opens Apple's installer if the development tools are missing. Run before driver setup. Homebrew must also be installed separately from brew.sh."
+  },
+  {
+    "category": "Setup",
+    "title": "Build or rebuild the patched capture helper",
+    "command": "alfa-setup",
+    "description": "Installs needed Homebrew dependencies, builds the pinned Kismet helper, and runs the PHY-table regression before installation. Existing source must match the tested revision."
+  },
+  {
+    "category": "Setup",
+    "title": "Install the optional injection environment",
+    "command": "alfa-injection-setup",
+    "description": "Installs pinned wifit3 in an isolated Python environment and runs a no-radio smoke test. Skip if already installed successfully."
+  },
+  {
+    "category": "Capture",
+    "title": "Check adapter visibility",
+    "command": "alfa-sniff --check",
+    "description": "Lists USB devices and identifies the ALFA AWUS036ACS / RTL8811AU (0bda:0811). Does not start a capture. --list is an equivalent alias."
+  },
+  {
+    "category": "Capture",
+    "title": "Monitor with channel hopping",
+    "command": "alfa-sniff",
+    "description": "Starts Kismet capture and rotates channels. Good for discovery; traffic on a channel can be missed while the adapter is tuned elsewhere. Keep this terminal running."
+  },
+  {
+    "category": "Capture",
+    "title": "Monitor a fixed channel",
+    "command": "alfa-sniff --channel 1",
+    "description": "Stays on channel 1; replace 1 with your access point's observed channel. This selects a channel, not a single network. Other networks on the same channel may also be captured."
+  },
+  {
+    "category": "Capture",
+    "title": "Show capture startup diagnostics",
+    "command": "alfa-sniff --diagnose --channel 1",
+    "description": "Includes driver startup messages while capturing on a fixed channel. --diagnose alone can also be used with channel hopping."
+  },
+  {
+    "category": "Capture",
+    "title": "Open the live Kismet interface",
+    "command": "open \"http://localhost:2501\"",
+    "description": "Run in a second terminal while alfa-sniff is active. Opens live device/network observations and packet counts. Complete Kismet login setup on first use."
+  },
+  {
+    "category": "Capture",
+    "title": "Stop capture and export the report",
+    "command": "Control-C",
+    "kind": "shortcut",
+    "description": "Press Control-C once in the terminal running alfa-sniff. Wait for Kismet to exit and the report export to finish. This is a keyboard shortcut, not a shell command."
+  },
+  {
+    "category": "Reports",
+    "title": "Generate and open the latest report",
+    "command": "alfa-report --open",
+    "description": "Creates a fresh snapshot from the latest capture, exports tables and packet files, and opens the HTML report. Includes passive handshake analysis of saved frames."
+  },
+  {
+    "category": "Reports",
+    "title": "Generate a report without opening it",
+    "command": "alfa-report",
+    "description": "Exports the latest capture and prints the report location. Updates the Latest Report link. Can also run in another terminal during capture; device summaries may lag."
+  },
+  {
+    "category": "Reports",
+    "title": "Open the existing report",
+    "command": "open \"${ALFA_DATA_DIR:-$HOME/Captures/ALFA}/Latest Report/index.html\"",
+    "description": "Opens the saved HTML without regenerating it. To incorporate newer packets, use alfa-report --open instead."
+  },
+  {
+    "category": "Reports",
+    "title": "Report on a specific capture file",
+    "command": "alfa-report \"/path/to/capture.kismet\" --open",
+    "description": "Replace the example path with an actual Kismet database. The source is opened read-only. This report becomes the Latest Report even if its capture is older."
+  },
+  {
+    "category": "Reports",
+    "title": "Report on a session directory",
+    "command": "alfa-report \"/path/to/session-directory\" --open",
+    "description": "Replace the example with a session folder. Selects the newest .kismet file directly inside that folder."
+  },
+  {
+    "category": "Reports",
+    "title": "Browse capture sessions",
+    "command": "open \"${ALFA_DATA_DIR:-$HOME/Captures/ALFA}\"",
+    "description": "Opens the capture root in Finder. Each session contains its original Kismet database and generated reports."
+  },
+  {
+    "category": "Reports",
+    "title": "Browse the latest report files",
+    "command": "open \"${ALFA_DATA_DIR:-$HOME/Captures/ALFA}/Latest Report\"",
+    "description": "Shows the HTML, full CSV tables, authentication subset, and complete PCAPNG export in Finder."
+  },
+  {
+    "category": "Reports",
+    "title": "Open every packet's metadata",
+    "command": "open \"${ALFA_DATA_DIR:-$HOME/Captures/ALFA}/Latest Report/packets.csv\"",
+    "description": "Opens packets.csv in your default CSV application. Contains all packet metadata rows, beyond the browser's 2,000-row preview."
+  },
+  {
+    "category": "Reports",
+    "title": "Open the complete capture in Wireshark",
+    "command": "open -a Wireshark \"${ALFA_DATA_DIR:-$HOME/Captures/ALFA}/Latest Report/capture.pcapng\"",
+    "description": "Requires Wireshark to be installed. Opens full captured bytes for protocol decoding; encrypted payloads remain encrypted without suitable keys."
+  },
+  {
+    "category": "Reports",
+    "title": "Open authentication packets in Wireshark",
+    "command": "open -a Wireshark \"${ALFA_DATA_DIR:-$HOME/Captures/ALFA}/Latest Report/authentication.pcapng\"",
+    "description": "Opens the detected EAPOL subset. It includes flagged and unclassified evidence; it can be empty. Use the eapol display filter inside Wireshark."
+  },
+  {
+    "category": "Reports",
+    "title": "Open the handshake attempt table",
+    "command": "open \"${ALFA_DATA_DIR:-$HOME/Captures/ALFA}/Latest Report/handshakes.csv\"",
+    "description": "Lists every grouped attempt, M1–M4 coverage, repeated steps, and original database row references. All four observed does not mean MICs were verified."
+  },
+  {
+    "category": "Reports",
+    "title": "Open all detected EAPOL observations",
+    "command": "open \"${ALFA_DATA_DIR:-$HOME/Captures/ALFA}/Latest Report/eapol.csv\"",
+    "description": "Opens the complete EAPOL metadata table, including observations beyond the browser preview and frames excluded from correlation."
+  },
+  {
+    "category": "Reports",
+    "title": "Import HC22000 alongside the latest capture",
+    "command": "alfa-report --hc22000 \"/path/to/export.hc22000\" --open",
+    "description": "Replace the path with your export. Adds PMKID/EAPOL metadata in a separate table without changing packet-backed handshake counts. Repeat this argument when regenerating; imports are not remembered automatically."
+  },
+  {
+    "category": "Reports",
+    "title": "Create a standalone HC22000 report",
+    "command": "alfa-report \"/path/to/export.hc22000\" --open",
+    "description": "Creates a metadata-only report with no Kismet dependency or invented packet capture. Saves under the configured capture root’s Imported reports folder and updates Latest Report."
+  },
+  {
+    "category": "Reports",
+    "title": "Import several HC22000 files",
+    "command": "alfa-report --hc22000 \"/path/to/first.hc22000\" --hc22000 \"/path/to/second.hc22000\" --open",
+    "description": "Combines metadata and skips exact normalized duplicates, retaining the first source reference. Malformed lines are counted and explained. Limits: 10 MiB per file, 20 MiB total, 20,000 unique records."
+  },
+  {
+    "category": "Reports",
+    "title": "Import HC22000 from the HTML page",
+    "kind": "action",
+    "command": "HC22000 files → Choose .hc22000 files → View imported records",
+    "description": "Reads selected files locally without uploading. Browser additions last until reload. Export CSV metadata or use the CLI for a report saved to disk. Clear browser imports restores the CLI-saved records."
+  },
+  {
+    "category": "Injection",
+    "title": "Verify injection on your access point",
+    "command": "alfa-injection-check --ssid \"Your-Lab\" --bssid \"02:00:00:00:00:01\" --channel 1",
+    "description": "Stop Kismet first. Replace all example values with your own authorized target's SSID, BSSID, and current 2.4 GHz channel (1–11). Listens for the target, then sends five directed probe requests. CONFIRMED requires matching replies to the unique test MAC; this is not an arbitrary packet replay command."
+  },
+  {
+    "category": "Injection",
+    "title": "Browse injection test results",
+    "command": "open \"${ALFA_DATA_DIR:-$HOME/Captures/ALFA}/Injection checks\"",
+    "description": "Each run has a timestamped folder with result.json, rx-target.pcap, and tx-submitted.pcap. Submitted bytes alone do not prove over-air transmission."
+  },
+  {
+    "category": "Injection",
+    "title": "Read an injection result in Terminal",
+    "command": "python3 -m json.tool \"/path/to/injection-run/result.json\"",
+    "description": "Replace the example directory with the exact results location printed by the check. Displays status, target, timestamps, and submission/response counts."
+  },
+  {
+    "category": "Injection",
+    "title": "Inspect received probe responses",
+    "command": "open -a Wireshark \"/path/to/injection-run/rx-target.pcap\"",
+    "description": "Requires Wireshark. Replace the path with a real test run. This file includes target advertisements as well as received responses; inspect destination and frame type."
+  },
+  {
+    "category": "Deauthentication",
+    "title": "Open the native deauthentication interface",
+    "command": "WIFIT3_RTL8821=dkms \"${ALFA_RADIO_DIR:-$HOME/.local/opt/wifit3}/venv/bin/python\" -m wifit3",
+    "description": "This opens the installed wifit3 terminal interface. Stop alfa-sniff first. Deauthentication can disconnect clients; use your own access point and a test device you control. This version has no standalone --deauth CLI flag. The workflow was verified from installed source, not by transmitting deauth frames.",
+    "steps": [
+      "Select the ALFA if prompted.",
+      "Select your network in the scanner to open its focused view. Confirm the BSSID; that view tunes to the AP channel.",
+      "Find your test device in the client list. Click its ✕ button, labeled Deauthenticate Client. This click transmits the targeted burst.",
+      "Read the send/ACK log and observe your test device. ACKs indicate reception, not necessarily accepted deauthentication or a completed handshake.",
+      "Press q to quit before restarting alfa-sniff."
+    ]
+  },
+  {
+    "category": "Deauthentication",
+    "title": "Send a finite burst to one client",
+    "kind": "action",
+    "command": "Network focused view → test client row → ✕ Deauthenticate Client",
+    "description": "This is a wifit3 UI action, not a shell command. The inspected version sends ten AP→client / client→AP rounds; retries can add frames. Choose the exact client MAC you control. The separate Deauth all / d control is broadcast, and AutoDeauth loops with broader behavior; neither is this per-client action."
+  },
+  {
+    "category": "Deauthentication",
+    "title": "Understand disabled deauth controls",
+    "kind": "action",
+    "command": "Read the focused view’s PMF status and log",
+    "description": "This build disables ordinary deauthentication controls when Protected Management Frames are required or their advertised posture is invalid. A disabled control is not evidence that USB injection failed. A successful probe-request test does not independently prove that deauth will disconnect a client."
+  },
+  {
+    "category": "Deauthentication",
+    "title": "Quit wifit3 and release the adapter",
+    "kind": "shortcut",
+    "command": "q",
+    "description": "Press q in the wifit3 focused view to quit. Wait for it to exit before starting alfa-sniff again. wifit3 results are separate from Kismet reports; alfa-report does not import wifit3 PCAP files."
+  },
+  {
+    "category": "Deauthentication",
+    "title": "Probe, deauth, and disassociation are different",
+    "kind": "action",
+    "command": "Probe request ≠ deauthentication ≠ disassociation",
+    "description": "alfa-injection-check sends five directed probe requests and looks for replies. The per-client wifit3 control sends deauthentication frames. Disassociation is another management-frame type, but this package has no dedicated standalone disassociation CLI. Captured handshakes are passive observations; no deauth is required to analyze frames already saved."
+  },
+  {
+    "category": "Help & diagnostics",
+    "title": "Capture command help",
+    "command": "alfa-sniff --help",
+    "description": "Lists --channel, --diagnose, --check/--list, and -- for passing additional arguments to Kismet."
+  },
+  {
+    "category": "Help & diagnostics",
+    "title": "Report command help",
+    "command": "alfa-report --help",
+    "description": "Shows the capture/session or standalone .hc22000 input, repeatable --hc22000 FILE imports, and --open."
+  },
+  {
+    "category": "Help & diagnostics",
+    "title": "Injection check help",
+    "command": "alfa-injection-check --help",
+    "description": "Shows required --ssid, --bssid, and --channel parameters and the supported channel range."
+  },
+  {
+    "category": "Help & diagnostics",
+    "title": "Capture setup help",
+    "command": "alfa-setup --help",
+    "description": "Lists --skip-deps, --source LOCAL_KISMET_REPO, and --jobs N."
+  },
+  {
+    "category": "Help & diagnostics",
+    "title": "Injection setup help",
+    "command": "alfa-injection-setup --help",
+    "description": "Describes installation and the no-radio smoke test."
+  },
+  {
+    "category": "Help & diagnostics",
+    "title": "Installer help",
+    "command": "cd \"$HOME/Projects/alfa-macos\"\n./install.sh --help",
+    "description": "Lists --with-capture, --with-injection, and --no-desktop. Adjust the checkout directory if needed."
+  },
+  {
+    "category": "Help & diagnostics",
+    "title": "Read saved device diagnostics",
+    "command": "cat \"$HOME/Library/Logs/alfa-macos/devices.log\"",
+    "description": "Shows the device-list output from the most recent packaged alfa-sniff run. A missing file means that launcher has not yet written diagnostics there."
+  },
+  {
+    "category": "Help & diagnostics",
+    "title": "Browse capture helper build logs",
+    "command": "open \"${ALFA_DRIVER_DIR:-$HOME/.local/opt/kismet-alfa}/logs\"",
+    "description": "Opens logs created by alfa-setup. Use them to inspect compilation or regression-test failures."
+  },
+  {
+    "category": "Advanced",
+    "title": "Choose a different save directory",
+    "command": "export ALFA_DATA_DIR=\"$HOME/Captures/ALFA-Lab\"",
+    "description": "Applies to subsequent capture, report, and injection commands in this terminal. Set the same value in other terminals when working with these sessions. Existing captures are not moved."
+  },
+  {
+    "category": "Advanced",
+    "title": "Return to the default save location",
+    "command": "unset ALFA_DATA_DIR",
+    "description": "Returns subsequent commands to the installed default save location, normally ~/Captures/ALFA."
+  },
+  {
+    "category": "Advanced",
+    "title": "Build with dependencies already installed",
+    "command": "alfa-setup --skip-deps --jobs 4",
+    "description": "Skips Homebrew installation steps and builds with four parallel jobs. Required dependencies, Kismet, and firmware must already exist."
+  },
+  {
+    "category": "Advanced",
+    "title": "Build from a local Kismet checkout",
+    "command": "alfa-setup --skip-deps --source \"/path/to/kismet\" --jobs 4",
+    "description": "Replace the path with a local Git repository containing the pinned commit. --source is used when initializing a fresh private source directory. Does not substitute an arbitrary upstream revision."
+  },
+  {
+    "category": "Advanced",
+    "title": "Use a separate capture helper build directory",
+    "command": "ALFA_DRIVER_DIR=\"$HOME/.local/opt/kismet-alfa-test\" alfa-setup",
+    "description": "Builds into a separate directory for this invocation. To use that helper for capture, set the same ALFA_DRIVER_DIR when running alfa-sniff."
+  },
+  {
+    "category": "Advanced",
+    "title": "Inspect available Kismet options",
+    "command": "kismet --help",
+    "description": "Lists options supported by your installed Kismet. To pass them through the wrapper, place -- after the alfa-sniff options and before the Kismet options."
+  },
+  {
+    "category": "Advanced",
+    "title": "Generate a synthetic report demo",
+    "command": "cd \"$HOME/Projects/alfa-macos\"\npython3 examples/make_demo.py --output build/glossary-demo",
+    "description": "Creates invented packet data with full and partial handshake observations. Requires kismetdb_to_pcap. Choose a fresh output directory; existing demo captures are not overwritten."
+  },
+  {
+    "category": "Advanced",
+    "title": "Run the project's local checks",
+    "command": "cd \"$HOME/Projects/alfa-macos\"\npython3 -m unittest discover -s tests -v\nnode --check lib/report.js",
+    "description": "Runs Python tests without radio access and checks the report JavaScript syntax. The final command requires Node.js."
+  }
+]

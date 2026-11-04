@@ -13,6 +13,48 @@ sys.path.insert(0, str(REPO / 'lib'))
 import report
 
 
+def key_frame(message, counter=5, client='02:00:00:00:00:02', nonce=None, qos=False):
+    """Invented EAPOL test bytes; MIC values are placeholders, not valid signatures."""
+    ap = bytes.fromhex('020000000001')
+    station = bytes.fromhex(client.replace(':', ''))
+    from_ap = message in (1, 3)
+    fc = 0x0008 | (0x0200 if from_ap else 0x0100) | (0x0080 if qos else 0)
+    frame = struct.pack('<HH', fc, 0) + (station+ap+ap if from_ap else ap+station+ap) + b'\0\0'
+    if qos:
+        frame += b'\0\0'
+    flags = {1:0x008a, 2:0x010a, 3:0x13ca, 4:0x030a}[message]
+    key_data = b'\x30\x02\x01\x00' if message == 2 else b'\x55'*16 if message == 3 else b''
+    body = bytearray(95)
+    body[0] = 2
+    struct.pack_into('>HHQ', body, 1, flags, 16, counter)
+    body[13:45] = nonce if nonce is not None else b'A'*32 if from_ap else b'S'*32 if message == 2 else bytes(32)
+    if message != 1:
+        body[77:93] = b'\x22'*16
+    struct.pack_into('>H', body, 93, len(key_data))
+    body += key_data
+    return frame + b'\xaa\xaa\x03\0\0\0\x88\x8e' + struct.pack('>BBH', 2, 3, len(body)) + body
+
+
+def add_demo_handshakes(path):
+    with closing(sqlite3.connect(path)) as db, db:
+        sample = list(db.execute('SELECT * FROM packets LIMIT 1').fetchone())
+        for i, (message, counter, client) in enumerate([
+                (1,5,'02:00:00:00:00:02'), (2,5,'02:00:00:00:00:02'),
+                (3,6,'02:00:00:00:00:02'), (3,6,'02:00:00:00:00:02'),
+                (4,6,'02:00:00:00:00:02'), (1,9,'02:00:00:00:00:03'),
+                (2,9,'02:00:00:00:00:03')]):
+            frame = key_frame(message, counter, client, qos=True)
+            row = sample.copy()
+            row[0] += 30+i
+            row[3], row[4] = ('02:00:00:00:00:01',client) if message in (1,3) else (client,'02:00:00:00:00:01')
+            row[5], row[8], row[13] = row[3], len(frame), frame
+            db.execute('INSERT INTO packets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', row)
+        dev = json.loads(db.execute('SELECT device FROM devices LIMIT 1').fetchone()[0])
+        dev['kismet.device.base.packets.total'] = db.execute('SELECT count(*) FROM packets').fetchone()[0]
+        dev['dot11.device']['dot11.device.advertised_ssid_map'][0]['dot11.advertisedssid.crypt_string'] = 'WPA2 (synthetic fixture)'
+        db.execute('UPDATE devices SET device=?', (json.dumps(dev),))
+
+
 def make_fixture(path, count=24, ssid='Example Lab'):
     """Create only invented addresses and frames; never inspect a real capture."""
     ap = '02:00:00:00:00:01'
@@ -76,6 +118,7 @@ def main():
     if source.exists():
         parser.error(f'Refusing to overwrite {source}; choose a fresh --output directory')
     make_fixture(source)
+    add_demo_handshakes(source)
     report.build_report(source, root / 'report')
     print(root / 'report/index.html')
 

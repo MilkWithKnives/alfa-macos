@@ -7,6 +7,7 @@ dist/
 *.log
 *.pcap
 *.pcapng
+*.hc22000
 *.kismet*
 captures/
 reports/

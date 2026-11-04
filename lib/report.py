@@ -14,6 +14,8 @@ import struct
 import subprocess
 import sys
 import tempfile
+import handshakes
+import hc22000
 
 ROOT = Path(os.environ.get('ALFA_DATA_DIR', str(Path.home() / 'Captures/ALFA'))).expanduser().resolve()
 PACKET_LIMIT = 2000
@@ -29,7 +31,7 @@ DATA = {0:'Data',1:'Data + CF-ACK',2:'Data + CF-Poll',3:'Data + CF-ACK/Poll',
         12:'QoS null',14:'QoS CF-Poll',15:'QoS CF-ACK/Poll'}
 PACKET_COLS = ['packet_row','time','frame','source','destination','transmitter',
                'channel','frequency_mhz','signal_dbm','bytes','captured_bytes',
-               'protected','retry','error','rate_mbps','phy','link_type','tags']
+               'protected','retry','error','rate_mbps','phy','link_type','tags','authentication']
 
 def local_time(value, micros=0):
     if not value:
@@ -94,10 +96,10 @@ def packet_record(row):
         row['sourcemac'], row['destmac'], row['transmac'], channel(row['frequency']),
         round((row['frequency'] or 0)/1000, 3), row['signal'] or None,
         row['packet_len'], len(blob), protected, retry, bool(row['error']),
-        row['datarate'] or None, row['phyname'], row['dlt'], row['tags'] or ''
+        row['datarate'] or None, row['phyname'], row['dlt'], row['tags'] or '', ''
     ]))
 
-def build_report(source, destination):
+def build_report(source, destination, imports=None):
     destination.mkdir(parents=True, exist_ok=True)
     # Snapshot avoids mixing rows from different moments during a live capture.
     with tempfile.TemporaryDirectory(prefix='.alfa-report-', dir=source.parent) as temp:
@@ -108,11 +110,11 @@ def build_report(source, destination):
         db = sqlite3.connect(snapshot)
         db.row_factory = sqlite3.Row
         try:
-            return export_report(db, source, snapshot, destination)
+            return export_report(db, source, snapshot, destination, imports)
         finally:
             db.close()
 
-def export_report(db, source, snapshot, destination):
+def export_report(db, source, snapshot, destination, imports=None):
     counts = dict(db.execute('SELECT count(*) total, min(ts_sec) first, max(ts_sec) last, '
                              'coalesce(sum(packet_len),0) bytes FROM packets').fetchone())
     devices, networks = [], []
@@ -123,7 +125,12 @@ def export_report(db, source, snapshot, destination):
         except (ValueError, TypeError):
             skipped += 1
             continue
+        if not isinstance(dev, dict):
+            skipped += 1
+            continue
         wifi = dev.get('dot11.device', {})
+        if not isinstance(wifi, dict):
+            wifi = {}
         devices.append({
             'name':dev.get('kismet.device.base.commonname') or dev.get('kismet.device.base.name',''),
             'mac':row['devmac'], 'role':dev.get('kismet.device.base.type',row['type']),
@@ -134,6 +141,8 @@ def export_report(db, source, snapshot, destination):
             'peak_dbm':row['strongest_signal'] or None,
             'first_seen':local_time(row['first_time']), 'last_seen':local_time(row['last_time'])})
         for ssid in entries(wifi.get('dot11.device.advertised_ssid_map', [])):
+            if not isinstance(ssid, dict):
+                continue
             networks.append({
                 'ssid':ssid.get('dot11.advertisedssid.ssid') or '(hidden / unnamed)',
                 'bssid':row['devmac'], 'security':ssid.get('dot11.advertisedssid.crypt_string','Unknown'),
@@ -149,12 +158,33 @@ def export_report(db, source, snapshot, destination):
     frames = collections.Counter()
     chan_stats = {}
     displayed = collections.deque(maxlen=PACKET_LIMIT)
+    auth_displayed = collections.deque(maxlen=5000)
+    tracker = handshakes.Tracker()
+    auth_counts = collections.Counter()
     errors = retries = protected_count = 0
-    with (destination/'packets.csv').open('w',encoding='utf-8-sig',newline='') as f:
+    with (destination/'packets.csv').open('w',encoding='utf-8-sig',newline='') as f, \
+            (destination/'eapol.csv').open('w',encoding='utf-8-sig',newline='') as auth_file, \
+            (destination/'authentication.pcapng').open('wb') as auth_capture:
         writer = csv.writer(f)
         writer.writerow(PACKET_COLS)
+        auth_writer = csv.writer(auth_file)
+        auth_writer.writerow(handshakes.EVENT_COLS)
+        auth_pcap = handshakes.Pcapng(auth_capture)
         for row in db.execute('SELECT rowid report_row, * FROM packets ORDER BY ts_sec, ts_usec, rowid'):
             record = packet_record(row)
+            event = handshakes.extract(row['packet'] or b'', row['dlt'])
+            if event:
+                event.update(packet_row=record['packet_row'], time=record['time'], channel=record['channel'],
+                             signal_dbm=record['signal_dbm'], retry=record['retry'],
+                             _stamp=row['ts_sec'] + (row['ts_usec'] or 0)/1_000_000)
+                if row['error'] or event['_bad_fcs']:
+                    event.update(message='Flagged EAPOL', assessment='Capture error or bad FCS; excluded from handshake correlation')
+                tracker.add(event)
+                auth_counts[event['message']] += 1
+                record['authentication'] = event['message']
+                auth_writer.writerow([safe_cell(event.get(c,'')) for c in handshakes.EVENT_COLS])
+                auth_pcap.write(row['packet'], row['dlt'], row['ts_sec'], row['ts_usec'], row['packet_len'])
+                auth_displayed.append({c:event.get(c,'') for c in handshakes.EVENT_COLS})
             writer.writerow([safe_cell(record[c]) for c in PACKET_COLS])
             frames[record['frame']] += 1
             errors += bool(record['error'])
@@ -170,6 +200,7 @@ def export_report(db, source, snapshot, destination):
                 stat['signal_sum'] += record['signal_dbm']; stat['signal_n'] += 1
             record['preview_hex'] = (row['packet'] or b'')[:96].hex(' ')
             displayed.append(record)
+        auth_pcap.finish()
     channels = []
     for stat in chan_stats.values():
         stat['mean_dbm'] = round(stat.pop('signal_sum')/stat['signal_n'],1) if stat['signal_n'] else None
@@ -184,6 +215,12 @@ def export_report(db, source, snapshot, destination):
     pairs = [dict(r) for r in db.execute('SELECT sourcemac source, destmac destination, count(*) packets, '
              'sum(packet_len) bytes FROM packets GROUP BY sourcemac,destmac ORDER BY packets DESC')]
     csv_file(destination/'address-pairs.csv',['source','destination','packets','bytes'],pairs)
+    names = collections.defaultdict(list)
+    for network in networks:
+        if network['ssid'] not in names[network['bssid'].lower()]:
+            names[network['bssid'].lower()].append(network['ssid'])
+    attempts = tracker.summaries({key:' / '.join(values) for key,values in names.items()})
+    csv_file(destination/'handshakes.csv', handshakes.HANDSHAKE_COLS, attempts)
     converter = os.environ.get('ALFA_PCAP_CONVERTER') or shutil.which('kismetdb_to_pcap')
     if not converter:
         raise ValueError('kismetdb_to_pcap is missing; install Kismet or set ALFA_PCAP_CONVERTER')
@@ -194,22 +231,51 @@ def export_report(db, source, snapshot, destination):
         if capture.read(4) != b'\x0a\x0d\x0d\x0a':
             raise ValueError('Kismet converter did not produce a PCAPNG capture')
     payload = {
+        'commands':json.loads(Path(__file__).with_name('commands.json').read_text()),
         'session':source.parent.name, 'source_file':source.name,
         'generated':dt.datetime.now().astimezone().isoformat(timespec='seconds'),
         'first':local_time(counts['first']), 'last':local_time(counts['last']),
         'total':counts['total'], 'bytes':counts['bytes'], 'errors':errors,
         'retries':retries,'protected':protected_count,'skipped_devices':skipped,
         'packet_limit':PACKET_LIMIT,
+        'authentication':{'total':sum(auth_counts.values()), 'counts':dict(auth_counts),
+                          'attempts':len(attempts), 'four_observed':sum(a['status']=='All four observed' for a in attempts),
+                          'event_limit':5000, 'attempt_limit':1000, 'window_seconds':handshakes.WINDOW},
         'tables':{'networks':networks,'devices':devices,'packets':list(reversed(displayed)),
-                  'channels':channels,'frames':frame_rows,'pairs':pairs},
+                  'channels':channels,'frames':frame_rows,'pairs':pairs,
+                  'handshakes':list(reversed(attempts[-1000:])), 'eapol':list(reversed(auth_displayed))},
         'columns':{'networks':network_cols,'devices':device_cols,'packets':PACKET_COLS,
+                   'handshakes':handshakes.HANDSHAKE_COLS, 'eapol':handshakes.EVENT_COLS,
                    'channels':['channel','frequency_mhz','packets','bytes','errors','mean_dbm'],
                    'frames':['frame','packets','share_percent'],
                    'pairs':['source','destination','packets','bytes']}}
+    write_report(payload, destination, imports, has_capture=True)
+    return counts['total']
+
+def write_report(payload, destination, imports, has_capture):
+    imports = imports if imports is not None else hc22000.load_files([])
+    payload['has_capture'] = has_capture
+    payload['imports'] = {key:value for key,value in imports.items() if key != 'records'}
+    payload['tables']['hc22000'] = imports['records']
+    payload['columns']['hc22000'] = hc22000.COLUMNS
+    csv_file(destination/'hc22000.csv', hc22000.COLUMNS, imports['records'])
+    csv_file(destination/'hc22000-errors.csv', ['source_file','source_line','reason'], imports['issues'])
     template = Path(__file__).with_name('report.html').read_text()
+    scripts = '\n'.join(Path(__file__).with_name(name).read_text() for name in ('hc22000.js','report.js'))
+    template = template.replace('<!--REPORT_SCRIPT-->', scripts)
     encoded = json.dumps(payload, ensure_ascii=True).replace('<','\\u003c').replace('>','\\u003e').replace('&','\\u0026')
     (destination/'index.html').write_text(template.replace('<!--REPORT_DATA-->',encoded),encoding='utf-8')
-    return counts['total']
+
+def build_import_report(source, destination, imports):
+    destination.mkdir(parents=True, exist_ok=True)
+    tables = {key:[] for key in ('networks','devices','packets','channels','frames','pairs','handshakes','eapol')}
+    payload = dict(commands=json.loads(Path(__file__).with_name('commands.json').read_text()),
+                   session='HC22000 imports', source_file=source.name,
+                   generated=dt.datetime.now().astimezone().isoformat(timespec='seconds'),
+                   first='', last='', total=0, bytes=0, errors=0, retries=0, protected=0, skipped_devices=0,
+                   packet_limit=PACKET_LIMIT, tables=tables, columns={key:[] for key in tables},
+                   authentication=dict(total=0,counts={},attempts=0,four_observed=0,event_limit=5000,attempt_limit=1000,window_seconds=handshakes.WINDOW))
+    write_report(payload,destination,imports,has_capture=False)
 
 def choose_source(path):
     if path:
@@ -224,17 +290,32 @@ def choose_source(path):
 def main():
     os.umask(0o077)
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('capture',nargs='?',help='Kismet file or session directory; default: latest session')
+    parser.add_argument('capture',nargs='?',help='Kismet file/session directory, or a .hc22000 file for a standalone import report')
+    parser.add_argument('--hc22000',action='append',default=[],metavar='FILE',help='Attach HC22000 metadata; repeat to import multiple files. Uses latest capture if available.')
     parser.add_argument('--open',action='store_true',help='Open the generated report in your browser')
     args = parser.parse_args()
     try:
-        source = choose_source(args.capture)
+        import_paths = list(args.hc22000)
+        standalone = bool(args.capture and Path(args.capture).suffix.lower()=='.hc22000')
+        if standalone:
+            source = Path(args.capture).expanduser().resolve()
+            import_paths.insert(0,source)
+        elif args.capture is None and import_paths and not any(ROOT.glob('*/*.kismet')):
+            standalone = True
+            source = Path(import_paths[0]).expanduser().resolve()
+        else:
+            source = choose_source(args.capture)
+        imports = hc22000.load_files(import_paths)
         # Immutable report generations keep a browser-open report and downloads consistent.
-        report_parent = source.parent/'reports'
-        report_parent.mkdir(exist_ok=True)
+        report_parent = ROOT/'Imported reports' if standalone else source.parent/'reports'
+        report_parent.mkdir(parents=True,exist_ok=True)
         destination = Path(tempfile.mkdtemp(prefix=dt.datetime.now().strftime('%Y%m%d-%H%M%S-'),dir=report_parent))
         try:
-            count = build_report(source,destination)
+            if standalone:
+                build_import_report(source,destination,imports)
+                count = 0
+            else:
+                count = build_report(source,destination,imports)
         except BaseException:
             shutil.rmtree(destination)
             raise
@@ -245,7 +326,11 @@ def main():
         pending = ROOT/f'.report-link-{os.getpid()}'
         pending.symlink_to(destination,target_is_directory=True)
         pending.replace(link)
-        print(f'Report ready: {destination / "index.html"}\n{count:,} packets exported to CSV and PCAPNG.')
+        print(f'Report ready: {destination / "index.html"}')
+        if not standalone:
+            print(f'{count:,} packets exported to CSV and PCAPNG.')
+        if import_paths:
+            print(f'{len(imports["records"]):,} unique HC22000 metadata records; {imports["duplicates"]:,} duplicates; {imports["invalid"]:,} invalid lines.')
         if args.open:
             subprocess.run(['/usr/bin/open',str(destination/'index.html')],check=True)
     except (OSError, ValueError, sqlite3.Error, subprocess.CalledProcessError) as exc:
